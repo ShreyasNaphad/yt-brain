@@ -57,80 +57,64 @@ async def process_video(body: dict):
     if cached and cache.get(f"status:{video_id}") == "ready":
         return {**cached, "processed": True, "status": "ready"}
     
-    # Step 1: Get metadata (fast, ~1 second)
+    # Step 1: Get metadata via YouTube oEmbed API (works on all servers, no auth)
+    metadata = {
+        "video_id": video_id,
+        "title": "YouTube Video",
+        "channel": "Unknown",
+        "thumbnail_url": f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
+        "duration_seconds": 0,
+        "url": url
+    }
     try:
-        metadata = {
-            "video_id": video_id,
-            "title": "YouTube Video",
-            "channel": "Unknown",
-            "thumbnail_url": f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
-            "duration_seconds": 0,
-            "url": url
-        }
-        # Try to get real metadata but dont fail if it errors
-        try:
-            import yt_dlp
-            ydl_opts = {'quiet': True, 'no_warnings': True, 'socket_timeout': 10}
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(f'https://www.youtube.com/watch?v={video_id}', download=False)
-                metadata["title"] = info.get("title", "YouTube Video")
-                metadata["channel"] = info.get("uploader", "Unknown")
-                metadata["duration_seconds"] = info.get("duration", 0)
-        except Exception as meta_err:
-            print(f"Metadata fetch failed (using fallback): {meta_err}")
-        
-        cache.set(f"video:{video_id}", metadata)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Metadata error: {str(e)}")
+        import httpx
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        resp = httpx.get(oembed_url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            metadata["title"] = data.get("title", "YouTube Video")
+            metadata["channel"] = data.get("author_name", "Unknown")
+            print(f"Metadata fetched via oEmbed: {metadata['title']}")
+    except Exception as meta_err:
+        print(f"oEmbed metadata fetch failed (using fallback): {meta_err}")
     
-    # Step 2: Get transcript (can take a few seconds)
+    cache.set(f"video:{video_id}", metadata)
+    
+    # Step 2: Get transcript via youtube_transcript_api (works on cloud servers)
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         transcript_entries = None
+        transcript_error = None
         
+        # Try default transcript first
         try:
             transcript_entries = YouTubeTranscriptApi.get_transcript(video_id)
-        except:
+            print(f"Got transcript directly: {len(transcript_entries)} entries")
+        except Exception as e1:
+            transcript_error = str(e1)
+            print(f"Direct transcript failed: {e1}")
+            # Try listing all available transcripts
             try:
                 transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
                 for t in transcript_list:
                     try:
                         transcript_entries = t.fetch()
+                        print(f"Got transcript via list: {len(transcript_entries)} entries")
                         break
-                    except:
+                    except Exception as e_fetch:
+                        print(f"Transcript fetch failed for {t.language}: {e_fetch}")
                         continue
-            except:
-                pass
+            except Exception as e2:
+                transcript_error = f"Primary: {transcript_error} | Fallback: {str(e2)}"
+                print(f"Transcript list failed: {e2}")
         
         if not transcript_entries:
-            # Fallback: use description as content
-            try:
-                import yt_dlp
-                ydl_opts = {'quiet': True, 'no_warnings': True}
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(
-                        f'https://www.youtube.com/watch?v={video_id}', 
-                        download=False
-                    )
-                    desc = info.get('description', 'No content available')
-                    title = info.get('title', '')
-                    content = f"{title}\n\n{desc}"
-                    words = content.split()
-                    transcript_entries = []
-                    for i in range(0, len(words), 50):
-                        transcript_entries.append({
-                            'text': ' '.join(words[i:i+50]),
-                            'start': i * 2,
-                            'duration': 10
-                        })
-            except Exception as desc_err:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Could not get any content from video: {str(desc_err)}"
-                )
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No transcript available for this video. The video may not have captions enabled. Error: {transcript_error}"
+            )
         
         # Step 3: Word-count-based chunking — covers the ENTIRE transcript
-        # Each chunk targets ~200 words, so nothing is ever dropped
         target_words_per_chunk = 200
         chunks = []
         current_words = []
@@ -160,13 +144,13 @@ async def process_video(body: dict):
         
         print(f"Chunked transcript into {len(chunks)} chunks covering full video")
         
-        # Step 4: Store full transcript text for BM25/summary
+        # Step 4: Store full transcript text
         full_text = ' '.join([e.get('text', '') for e in transcript_entries])
         cache.set(f"transcript:{video_id}", full_text)
         
         # Step 5: Embed and store chunks (TF-IDF, instant)
         texts = [c['text'] for c in chunks]
-        embedding_service.fit(texts) # Try fitting to ensure we can embed
+        embedding_service.fit(texts)
         vectors = embedding_service.embed_batch(texts)
         for i, chunk in enumerate(chunks):
             chunk['vector'] = vectors[i]

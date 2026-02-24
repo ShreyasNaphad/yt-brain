@@ -2,7 +2,6 @@ fastapi
 uvicorn[standard]
 groq
 youtube-transcript-api
-yt-dlp
 scikit-learn
 numpy
 python-dotenv
