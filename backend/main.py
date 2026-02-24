@@ -9,7 +9,8 @@ print(f"[STARTUP] .env path: {env_path}, exists: {env_path.exists()}")
 print(f"[STARTUP] GROQ_API_KEY loaded: {'Yes' if os.getenv('GROQ_API_KEY') else 'No'}")
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import time
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -79,9 +80,15 @@ async def startup_event():
     logger.info("Starting up YTBrain API (In-Memory Mode)")
     # No database initialization needed for in-memory stores
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to YTBrain API"}
+# Mount static files if the folder exists (production)
+static_path = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_path):
+    app.mount("/assets", StaticFiles(directory=f"{static_path}/assets"), name="assets")
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        index = os.path.join(static_path, "index.html")
+        return FileResponse(index)
 
 @app.get("/health")
 async def health_check():
