@@ -129,20 +129,26 @@ async def process_video(body: dict):
                     detail=f"Could not get any content from video: {str(desc_err)}"
                 )
         
-        # Step 3: Simple chunking - max 15 chunks
+        # Step 3: Smart chunking - more chunks for longer videos, max ~300 words each
+        max_chunks = 60
+        max_words_per_chunk = 300
         chunks = []
         total = len(transcript_entries)
-        chunk_size = max(1, total // 15)
+        chunk_size = max(1, total // max_chunks)
         
         for i in range(0, total, chunk_size):
             group = transcript_entries[i:i+chunk_size]
-            text = ' '.join([e.get('text', '') for e in group])
+            words = []
+            for e in group:
+                words.extend(e.get('text', '').split())
+            # Trim to max words to prevent oversized chunks
+            text = ' '.join(words[:max_words_per_chunk])
             chunks.append({
                 'text': text,
                 'start_time': group[0].get('start', 0),
                 'chunk_index': len(chunks)
             })
-            if len(chunks) >= 15:
+            if len(chunks) >= max_chunks:
                 break
         
         # Step 4: Store full transcript text for BM25/summary

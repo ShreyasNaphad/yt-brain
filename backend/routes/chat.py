@@ -40,12 +40,16 @@ async def chat(body: dict):
         if not top_chunks or all(score == 0 for score, _ in scored_chunks[:4]):
             top_chunks = chunks[:4]
 
-        # Build context
+        # Build context (capped to avoid overwhelming the LLM)
         context = ""
         for chunk in top_chunks:
             mins = int(chunk['start_time'] // 60)
             secs = int(chunk['start_time'] % 60)
             context += f"[{mins:02d}:{secs:02d}] {chunk['text']}\n\n"
+        
+        # Safety trim: cap context to ~4000 chars to stay within token limits
+        if len(context) > 4000:
+            context = context[:4000] + "\n...(trimmed)"
 
         # Build messages for LLM
         messages = [
