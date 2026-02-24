@@ -66,7 +66,16 @@ async def get_questions(video_id: str):
         if not transcript:
             raise HTTPException(status_code=400, detail="Video not processed yet")
         
-        trimmed = transcript[:5000] if len(transcript) > 5000 else transcript
+        # Sample from beginning, middle, and end for full coverage
+        max_section = 1700
+        if len(transcript) > max_section * 3:
+            beginning = transcript[:max_section]
+            mid_start = len(transcript) // 2 - max_section // 2
+            middle = transcript[mid_start:mid_start + max_section]
+            ending = transcript[-max_section:]
+            trimmed = f"{beginning}\n\n{middle}\n\n{ending}"
+        else:
+            trimmed = transcript
         
         messages = [
             {
