@@ -1,10 +1,10 @@
 fastapi
-uvicorn[standard]
-groq
+uvicorn
 youtube-transcript-api
+httpx
 scikit-learn
 numpy
 python-dotenv
 rank-bm25
-httpx
+groq
 aiofiles

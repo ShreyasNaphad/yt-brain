@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any
 import logging
 
 from services.cache_service import cache
-from services.youtube_service import YouTubeService, extract_video_id
+from services.youtube_service import extract_video_id, extract_metadata, extract_transcript, chunk_transcript
 from services.embedding_service import EmbeddingService
 from services.vector_store import vector_store
 from services.llm_service import llm_service
@@ -22,11 +22,7 @@ def test_llm():
         return {"status": "error", "message": str(e)}
 
 # Initialize local services (stateless ones)
-youtube_service = YouTubeService()
 embedding_service = EmbeddingService()
-
-# Use global singletons for stateful services
-# cache and vector_store are imported
 
 class VideoRequest(BaseModel):
     url: str
@@ -57,129 +53,16 @@ async def process_video(body: dict):
     if cached and cache.get(f"status:{video_id}") == "ready":
         return {**cached, "processed": True, "status": "ready"}
     
-    # Step 1: Get metadata via YouTube oEmbed API (works on all servers, no auth)
-    metadata = {
-        "video_id": video_id,
-        "title": "YouTube Video",
-        "channel": "Unknown",
-        "thumbnail_url": f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
-        "duration_seconds": 0,
-        "url": url
-    }
     try:
-        import httpx
-        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
-        resp = httpx.get(oembed_url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            metadata["title"] = data.get("title", "YouTube Video")
-            metadata["channel"] = data.get("author_name", "Unknown")
-            print(f"Metadata fetched via oEmbed: {metadata['title']}")
-    except Exception as meta_err:
-        print(f"oEmbed metadata fetch failed (using fallback): {meta_err}")
-    
-    cache.set(f"video:{video_id}", metadata)
-    
-    # Step 2: Get transcript via youtube_transcript_api (works on cloud servers)
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-        transcript_entries = None
-        transcript_error = None
+        # Step 1: Get metadata via oEmbed API
+        metadata = extract_metadata(url)
+        cache.set(f"video:{video_id}", metadata)
         
-        # Detect API version: v1.0+ uses instance methods, older uses static
-        use_new_api = not hasattr(YouTubeTranscriptApi, 'get_transcript')
+        # Step 2: Get transcript
+        transcript_entries = extract_transcript(video_id)
         
-        if use_new_api:
-            # NEW API (v1.0+): instance-based
-            print("Using youtube-transcript-api v1.0+ (new API)")
-            ytt = YouTubeTranscriptApi()
-            try:
-                result = ytt.fetch(video_id)
-                # Convert to list of dicts
-                transcript_entries = [
-                    {'text': snippet.text, 'start': snippet.start, 'duration': snippet.duration}
-                    for snippet in result
-                ]
-                print(f"Got transcript via new API: {len(transcript_entries)} entries")
-            except Exception as e1:
-                transcript_error = str(e1)
-                print(f"New API fetch failed: {e1}")
-                # Try listing available transcripts
-                try:
-                    transcript_list = ytt.list(video_id)
-                    for t in transcript_list:
-                        try:
-                            result = t.fetch()
-                            transcript_entries = [
-                                {'text': snippet.text, 'start': snippet.start, 'duration': snippet.duration}
-                                for snippet in result
-                            ]
-                            print(f"Got transcript via new API list: {len(transcript_entries)} entries")
-                            break
-                        except Exception as e_fetch:
-                            print(f"Transcript fetch failed for {t.language}: {e_fetch}")
-                            continue
-                except Exception as e2:
-                    transcript_error = f"Primary: {transcript_error} | Fallback: {str(e2)}"
-                    print(f"New API list failed: {e2}")
-        else:
-            # OLD API (pre-1.0): static methods
-            print("Using youtube-transcript-api (legacy API)")
-            try:
-                transcript_entries = YouTubeTranscriptApi.get_transcript(video_id)
-                print(f"Got transcript directly: {len(transcript_entries)} entries")
-            except Exception as e1:
-                transcript_error = str(e1)
-                print(f"Direct transcript failed: {e1}")
-                try:
-                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                    for t in transcript_list:
-                        try:
-                            transcript_entries = t.fetch()
-                            print(f"Got transcript via list: {len(transcript_entries)} entries")
-                            break
-                        except Exception as e_fetch:
-                            print(f"Transcript fetch failed for {t.language}: {e_fetch}")
-                            continue
-                except Exception as e2:
-                    transcript_error = f"Primary: {transcript_error} | Fallback: {str(e2)}"
-                    print(f"Transcript list failed: {e2}")
-        
-        if not transcript_entries:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"No transcript available for this video. The video may not have captions enabled. Error: {transcript_error}"
-            )
-        
-        # Step 3: Word-count-based chunking — covers the ENTIRE transcript
-        target_words_per_chunk = 200
-        chunks = []
-        current_words = []
-        current_start_time = transcript_entries[0].get('start', 0)
-        
-        for entry in transcript_entries:
-            entry_words = entry.get('text', '').split()
-            if not current_words:
-                current_start_time = entry.get('start', 0)
-            current_words.extend(entry_words)
-            
-            if len(current_words) >= target_words_per_chunk:
-                chunks.append({
-                    'text': ' '.join(current_words),
-                    'start_time': current_start_time,
-                    'chunk_index': len(chunks)
-                })
-                current_words = []
-        
-        # Don't forget the last chunk
-        if current_words:
-            chunks.append({
-                'text': ' '.join(current_words),
-                'start_time': current_start_time,
-                'chunk_index': len(chunks)
-            })
-        
-        print(f"Chunked transcript into {len(chunks)} chunks covering full video")
+        # Step 3: Chunk it
+        chunks = chunk_transcript(transcript_entries)
         
         # Step 4: Store full transcript text
         full_text = ' '.join([e.get('text', '') for e in transcript_entries])
