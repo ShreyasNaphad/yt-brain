@@ -56,8 +56,9 @@ const ChatInterface = ({ videoId, metadata, onBack, onGoHome, initialMessage = '
                 setCurrentSources(response.sources);
             }
         } catch (error) {
-            console.error(error);
-            setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I encountered an error. Please try again." }]);
+            console.error('Chat error:', error?.response?.data || error);
+            const detail = error?.response?.data?.detail || error?.message || "Unknown error";
+            setMessages(prev => [...prev, { role: 'assistant', content: `Sorry, something went wrong: ${detail}` }]);
         } finally {
             setLoading(false);
         }
