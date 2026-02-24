@@ -1,8 +1,10 @@
 fastapi
 uvicorn
-python-dotenv
-langchain-groq
-langchain
-yt-dlp
+groq
 youtube-transcript-api
+yt-dlp
 scikit-learn
+numpy
+python-dotenv
+rank-bm25
+httpx
