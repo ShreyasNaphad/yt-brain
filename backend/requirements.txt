@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-youtube-transcript-api
+yt-dlp
 httpx
 scikit-learn
 numpy
