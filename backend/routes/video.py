@@ -86,27 +86,64 @@ async def process_video(body: dict):
         transcript_entries = None
         transcript_error = None
         
-        # Try default transcript first
-        try:
-            transcript_entries = YouTubeTranscriptApi.get_transcript(video_id)
-            print(f"Got transcript directly: {len(transcript_entries)} entries")
-        except Exception as e1:
-            transcript_error = str(e1)
-            print(f"Direct transcript failed: {e1}")
-            # Try listing all available transcripts
+        # Detect API version: v1.0+ uses instance methods, older uses static
+        use_new_api = not hasattr(YouTubeTranscriptApi, 'get_transcript')
+        
+        if use_new_api:
+            # NEW API (v1.0+): instance-based
+            print("Using youtube-transcript-api v1.0+ (new API)")
+            ytt = YouTubeTranscriptApi()
             try:
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                for t in transcript_list:
-                    try:
-                        transcript_entries = t.fetch()
-                        print(f"Got transcript via list: {len(transcript_entries)} entries")
-                        break
-                    except Exception as e_fetch:
-                        print(f"Transcript fetch failed for {t.language}: {e_fetch}")
-                        continue
-            except Exception as e2:
-                transcript_error = f"Primary: {transcript_error} | Fallback: {str(e2)}"
-                print(f"Transcript list failed: {e2}")
+                result = ytt.fetch(video_id)
+                # Convert to list of dicts
+                transcript_entries = [
+                    {'text': snippet.text, 'start': snippet.start, 'duration': snippet.duration}
+                    for snippet in result
+                ]
+                print(f"Got transcript via new API: {len(transcript_entries)} entries")
+            except Exception as e1:
+                transcript_error = str(e1)
+                print(f"New API fetch failed: {e1}")
+                # Try listing available transcripts
+                try:
+                    transcript_list = ytt.list(video_id)
+                    for t in transcript_list:
+                        try:
+                            result = t.fetch()
+                            transcript_entries = [
+                                {'text': snippet.text, 'start': snippet.start, 'duration': snippet.duration}
+                                for snippet in result
+                            ]
+                            print(f"Got transcript via new API list: {len(transcript_entries)} entries")
+                            break
+                        except Exception as e_fetch:
+                            print(f"Transcript fetch failed for {t.language}: {e_fetch}")
+                            continue
+                except Exception as e2:
+                    transcript_error = f"Primary: {transcript_error} | Fallback: {str(e2)}"
+                    print(f"New API list failed: {e2}")
+        else:
+            # OLD API (pre-1.0): static methods
+            print("Using youtube-transcript-api (legacy API)")
+            try:
+                transcript_entries = YouTubeTranscriptApi.get_transcript(video_id)
+                print(f"Got transcript directly: {len(transcript_entries)} entries")
+            except Exception as e1:
+                transcript_error = str(e1)
+                print(f"Direct transcript failed: {e1}")
+                try:
+                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                    for t in transcript_list:
+                        try:
+                            transcript_entries = t.fetch()
+                            print(f"Got transcript via list: {len(transcript_entries)} entries")
+                            break
+                        except Exception as e_fetch:
+                            print(f"Transcript fetch failed for {t.language}: {e_fetch}")
+                            continue
+                except Exception as e2:
+                    transcript_error = f"Primary: {transcript_error} | Fallback: {str(e2)}"
+                    print(f"Transcript list failed: {e2}")
         
         if not transcript_entries:
             raise HTTPException(
