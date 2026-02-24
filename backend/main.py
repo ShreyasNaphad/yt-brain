@@ -42,15 +42,10 @@ async def log_requests(request: Request, call_next):
     logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.2f}ms")
     return response
 
-# CORS setup
-origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
-
+# CORS setup - allow all origins for production (frontend served from same domain)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,16 +75,6 @@ async def startup_event():
     logger.info("Starting up YTBrain API (In-Memory Mode)")
     # No database initialization needed for in-memory stores
 
-# Mount static files if the folder exists (production)
-static_path = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_path):
-    app.mount("/assets", StaticFiles(directory=f"{static_path}/assets"), name="assets")
-    
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        index = os.path.join(static_path, "index.html")
-        return FileResponse(index)
-
 @app.get("/health")
 async def health_check():
     health_status = {
@@ -100,6 +85,22 @@ async def health_check():
         }
     }
     return health_status
+
+# Mount static files if the folder exists (production)
+static_path = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_path):
+    # Serve built assets (JS, CSS, images)
+    assets_path = os.path.join(static_path, "assets")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # Don't intercept API routes
+        if full_path.startswith("api/"):
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
+        index = os.path.join(static_path, "index.html")
+        return FileResponse(index)
 
 if __name__ == "__main__":
     import uvicorn
