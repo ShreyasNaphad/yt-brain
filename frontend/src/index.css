@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+    --color-game-dark: #0a0a1a;
+    --color-game-darker: #050510;
+    --color-game-purple: #7c3aed;
+    --color-game-pink: #ec4899;
+    --color-game-cyan: #06b6d4;
+    --color-game-gold: #f59e0b;
+    --color-game-green: #10b981;
+    --color-game-card: #111128;
+    --color-game-border: #1e1e3f;
+
+    --animate-glow: glow 2s ease-in-out infinite alternate;
+    --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    --animate-float: float 6s ease-in-out infinite;
+
+    @keyframes glow {
+        from {
+            box-shadow: 0 0 10px -5px var(--color-game-purple);
+        }
+
+        to {
+            box-shadow: 0 0 20px 5px var(--color-game-purple);
+        }
+    }
+
+    @keyframes float {
+
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-10px);
+        }
+    }
+}
+
+@layer base {
+    body {
+        background-color: var(--color-game-dark);
+        color: white;
+        font-family: 'Inter', sans-serif;
+    }
+}
