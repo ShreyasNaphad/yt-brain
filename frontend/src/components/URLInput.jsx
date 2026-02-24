@@ -35,7 +35,7 @@ const URLInput = ({ onMetadataLoaded, onProcessingStart }) => {
             // One big request - wait up to 60s
             // status is returned in the response
             const response = await axios.post(
-                'http://localhost:8000/api/video/process',
+                (import.meta.env.DEV ? 'http://localhost:8000' : '') + '/api/video/process',
                 { url },
                 { timeout: 300000 } // 5m timeout
             );
