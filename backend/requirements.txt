@@ -2,6 +2,7 @@ fastapi
 uvicorn
 yt-dlp
 httpx
+youtube-transcript-api
 scikit-learn
 numpy
 python-dotenv
