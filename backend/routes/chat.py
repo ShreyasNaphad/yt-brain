@@ -70,17 +70,26 @@ async def chat(body: dict):
             step = max(1, total // 8)
             top_chunks = [chunks[i] for i in range(0, total, step)][:8]
 
-        # Build context from retrieved chunks
+        # Build context from retrieved chunks (no timestamps — they can be inaccurate)
         context = ""
         for chunk in top_chunks:
-            mins = int(chunk.get('start_time', 0) // 60)
-            secs = int(chunk.get('start_time', 0) % 60)
-            context += f"[{mins:02d}:{secs:02d}] {chunk['text']}\n\n"
+            context += f"{chunk['text']}\n\n"
 
         # Allow generous context: up to ~12000 chars (~3000 tokens)
         # Groq's llama-3.3-70b supports 128k context, so this is safe
         if len(context) > 12000:
             context = context[:12000] + "\n...(additional content available)"
+
+        # Detect if user wants a detailed/long answer
+        msg_lower = message.lower()
+        wants_detail = any(w in msg_lower for w in ['detail', 'detailed', 'long', 'elaborate', 'in depth', 'in-depth', 'explain in', 'thorough', 'comprehensive', 'everything about'])
+
+        if wants_detail:
+            length_instruction = "Give a detailed, thorough answer with full explanations."
+            max_tokens = 800
+        else:
+            length_instruction = "Give a medium-length answer in 3-4 sentences. Be informative but concise."
+            max_tokens = 400
 
         # Build messages for LLM — include overview for global understanding
         messages = [
@@ -91,7 +100,7 @@ async def chat(body: dict):
 CRITICAL RULES:
 - DO NOT say "in the transcript", "the video says", "in the excerpts", or anything similar. Just state the facts directly as if you know them.
 - Be warm and natural in your tone. Talk like a friend who watched the whole video.
-- Include timestamps like [MM:SS] when specific parts are relevant.
+- Do NOT include any timestamps in your answer.
 - You have access to the FULL VIDEO OVERVIEW below. Use it to answer broad questions about the video's topics and structure.
 - For specific questions, use the RELEVANT SECTIONS which contain detailed content.
 - If the answer cannot be determined from the information provided, respond helpfully with what you DO know about the video.
@@ -104,11 +113,11 @@ RELEVANT SECTIONS:
 
 QUESTION: {message}
 
-Give a comprehensive, helpful answer. For broad questions (like "explain important topics"), draw from the overview and provide detailed explanations. For specific questions, cite timestamps."""
+{length_instruction}"""
             }
         ]
 
-        answer = llm_service.chat_completion(messages, max_tokens=600)
+        answer = llm_service.chat_completion(messages, max_tokens=max_tokens)
 
         sources = [{"text": c['text'][:100], "start_time": c.get('start_time', 0)} for c in top_chunks[:4]]
         return {"answer": answer, "sources": sources}

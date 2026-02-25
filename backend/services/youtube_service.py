@@ -117,7 +117,7 @@ def _innertube_get_player(video_id: str, client_name: str = "android") -> dict |
         "videoId": video_id,
     }
     try:
-        with httpx.Client(timeout=20) as client:
+        with httpx.Client(timeout=30) as client:
             r = client.post(
                 "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
                 json=payload,
@@ -177,9 +177,9 @@ def _innertube_transcript(video_id: str, client_name: str = "android") -> list |
     else:
         caption_url = caption_url.replace("fmt=srv3", "fmt=json3").replace("fmt=srv1", "fmt=json3")
 
-    # Step 2: fetch the captions
+    # Step 2: fetch the captions (long timeout for 3hr+ videos)
     try:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(caption_url, headers=cfg["headers"])
             if r.status_code != 200:
                 logger.warning(f"Innertube ({client_name}): caption fetch HTTP {r.status_code}")
