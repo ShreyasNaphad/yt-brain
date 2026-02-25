@@ -28,7 +28,7 @@ class LLMService:
             self.client = Groq(api_key=api_key)
             logger.info("Groq client initialized successfully")
 
-        self.model = "llama-3.3-70b-versatile"
+        self.model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
     def chat_completion(self, messages: List[Dict[str, str]], max_tokens: int = 300, temperature: float = 0.3) -> str:
         if not self.client:
