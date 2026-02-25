@@ -236,31 +236,45 @@ def _youtube_transcript_api(video_id: str) -> list | None:
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         # Try fetching transcript — supports both old and new API versions
-        try:
-            # New API (v1.0+)
-            ytt_api = YouTubeTranscriptApi()
-            transcript_data = ytt_api.fetch(video_id, languages=["en", "en-US", "en-GB"])
-            transcript = []
-            for snippet in transcript_data:
-                text = snippet.text.strip() if hasattr(snippet, 'text') else str(snippet.get('text', '')).strip()
-                start = snippet.start if hasattr(snippet, 'start') else snippet.get('start', 0)
-                duration = snippet.duration if hasattr(snippet, 'duration') else snippet.get('duration', 0)
-                if text:
-                    transcript.append({
-                        "text": text,
-                        "start": float(start),
-                        "duration": float(duration),
-                    })
-            if transcript:
-                logger.info(f"youtube-transcript-api (new) success: {len(transcript)} entries")
-                return transcript
-        except Exception as e1:
-            logger.info(f"youtube-transcript-api new API failed: {e1}, trying old API...")
-            # Old API (pre-1.0)
+        # Try multiple language options: English first, then any available
+        lang_options = [
+            ["en", "en-US", "en-GB"],  # English first
+            None,  # Then any available language (for music, non-English videos)
+        ]
+
+        for langs in lang_options:
             try:
-                transcript_list = YouTubeTranscriptApi.get_transcript(
-                    video_id, languages=["en", "en-US", "en-GB"]
-                )
+                # New API (v1.0+)
+                ytt_api = YouTubeTranscriptApi()
+                if langs:
+                    transcript_data = ytt_api.fetch(video_id, languages=langs)
+                else:
+                    # Fetch any available transcript
+                    transcript_data = ytt_api.fetch(video_id)
+                transcript = []
+                for snippet in transcript_data:
+                    text = snippet.text.strip() if hasattr(snippet, 'text') else str(snippet.get('text', '')).strip()
+                    start = snippet.start if hasattr(snippet, 'start') else snippet.get('start', 0)
+                    duration = snippet.duration if hasattr(snippet, 'duration') else snippet.get('duration', 0)
+                    if text:
+                        transcript.append({
+                            "text": text,
+                            "start": float(start),
+                            "duration": float(duration),
+                        })
+                if transcript:
+                    logger.info(f"youtube-transcript-api (new, langs={langs}) success: {len(transcript)} entries")
+                    return transcript
+            except Exception as e1:
+                logger.info(f"youtube-transcript-api new API (langs={langs}) failed: {e1}")
+
+        # Old API fallback (pre-1.0)
+        for langs in lang_options:
+            try:
+                if langs:
+                    transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=langs)
+                else:
+                    transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
                 transcript = []
                 for entry in transcript_list:
                     text = entry.get("text", "").strip()
@@ -271,10 +285,11 @@ def _youtube_transcript_api(video_id: str) -> list | None:
                             "duration": entry.get("duration", 0),
                         })
                 if transcript:
-                    logger.info(f"youtube-transcript-api (old) success: {len(transcript)} entries")
+                    logger.info(f"youtube-transcript-api (old, langs={langs}) success: {len(transcript)} entries")
                     return transcript
             except Exception as e2:
-                logger.warning(f"youtube-transcript-api old API also failed: {e2}")
+                logger.info(f"youtube-transcript-api old API (langs={langs}) failed: {e2}")
+
     except ImportError:
         logger.warning("youtube-transcript-api not installed, skipping")
     except Exception as e:

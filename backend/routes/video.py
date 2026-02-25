@@ -48,34 +48,39 @@ def _generate_overview(chunks: list, metadata: dict) -> str:
     if total_chunks == 0:
         return ""
 
-    # Sample up to 20 chunks evenly distributed across the video
-    max_samples = min(20, total_chunks)
+    # Sample up to 30 chunks evenly distributed across the ENTIRE video
+    max_samples = min(30, total_chunks)
     step = max(1, total_chunks // max_samples)
     sampled = [chunks[i] for i in range(0, total_chunks, step)][:max_samples]
+    # Always include the last chunk to ensure full video coverage
+    if sampled[-1] != chunks[-1]:
+        sampled.append(chunks[-1])
 
-    # Build a sampled transcript with timestamps
+    # Build a sampled transcript with section markers
     sampled_text = ""
-    for chunk in sampled:
-        mins = int(chunk['start_time'] // 60)
-        secs = int(chunk['start_time'] % 60)
-        # Take first 300 chars of each sampled chunk to stay within token limits
-        text_snippet = chunk['text'][:300]
-        sampled_text += f"[{mins:02d}:{secs:02d}] {text_snippet}\n\n"
+    for idx, chunk in enumerate(sampled):
+        position_pct = int((chunk['start_time'] / max(chunks[-1]['start_time'], 1)) * 100)
+        text_snippet = chunk['text'][:400]
+        sampled_text += f"[Section {idx+1}, ~{position_pct}% through video] {text_snippet}\n\n"
 
-    # Cap the sampled text to ~8000 chars for the overview generation prompt
-    if len(sampled_text) > 8000:
-        sampled_text = sampled_text[:8000]
+    # Cap the sampled text to ~10000 chars for the overview generation prompt
+    if len(sampled_text) > 10000:
+        sampled_text = sampled_text[:10000]
 
     title = metadata.get("title", "Unknown")
     channel = metadata.get("channel", "Unknown")
+
+    # Calculate video duration from last chunk
+    duration_min = int(chunks[-1]['start_time'] / 60) if chunks else 0
+    duration_str = f"{duration_min // 60}h {duration_min % 60}m" if duration_min > 60 else f"{duration_min}m"
 
     try:
         messages = [
             {
                 "role": "user",
-                "content": f"""Analyze these excerpts from the video "{title}" by {channel} and create a comprehensive topic overview.
+                "content": f"""Analyze these excerpts from the video "{title}" by {channel} (duration: {duration_str}) and create a comprehensive topic overview.
 
-The video has {total_chunks} content sections. These are evenly sampled excerpts:
+The video has {total_chunks} content sections. These are evenly sampled excerpts covering the ENTIRE video from start to finish:
 
 {sampled_text}
 
@@ -83,23 +88,22 @@ Return ONLY valid JSON:
 {{
   "main_topic": "one sentence describing what the entire video is about",
   "topics": [
-    {{"title": "topic name", "description": "1-2 sentence description", "approximate_timestamp": "MM:SS"}}
+    {{"title": "topic name", "description": "2-3 sentence detailed description of what is covered"}}
   ],
   "key_terms": ["term1", "term2", "term3"]
 }}
 
-Include 8-15 topics that cover the FULL video. Include 10-20 key terms."""
+IMPORTANT: Include 10-20 topics that cover the FULL video from beginning to end. Do not skip the later parts. Include 15-25 key terms."""
             }
         ]
-        overview_data = llm_service.chat_completion_json(messages, max_tokens=1200)
+        overview_data = llm_service.chat_completion_json(messages, max_tokens=1500)
 
         # Format as readable text for context injection
-        overview_text = f"VIDEO: {title} by {channel}\n"
+        overview_text = f"VIDEO: {title} by {channel} ({duration_str})\n"
         overview_text += f"MAIN TOPIC: {overview_data.get('main_topic', '')}\n\n"
         overview_text += "TOPICS COVERED:\n"
         for i, topic in enumerate(overview_data.get("topics", []), 1):
-            ts = topic.get("approximate_timestamp", "")
-            overview_text += f"{i}. [{ts}] {topic['title']}: {topic['description']}\n"
+            overview_text += f"{i}. {topic.get('title', '')}: {topic.get('description', '')}\n"
 
         key_terms = overview_data.get("key_terms", [])
         if key_terms:
@@ -110,8 +114,7 @@ Include 8-15 topics that cover the FULL video. Include 10-20 key terms."""
 
     except Exception as e:
         logger.warning(f"Overview generation failed: {e}")
-        # Fallback: just list chunk timestamps as basic overview
-        return f"VIDEO: {title} by {channel}\nTotal sections: {total_chunks}\n"
+        return f"VIDEO: {title} by {channel} ({duration_str})\nTotal sections: {total_chunks}\n"
 
 
 @router.post("/process")
