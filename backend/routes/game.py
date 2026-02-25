@@ -66,6 +66,9 @@ async def get_questions(video_id: str):
         if not transcript:
             raise HTTPException(status_code=400, detail="Video not processed yet")
         
+        # Get the overview for additional context (fixes accuracy on Render)
+        overview = cache.get(f"overview:{video_id}") or ""
+        
         # Sample from beginning, middle, and end for full coverage
         max_section = 1700
         if len(transcript) > max_section * 3:
@@ -80,7 +83,7 @@ async def get_questions(video_id: str):
         messages = [
             {
                 "role": "user",
-                "content": f"""Based on this video information, generate exactly 15 quiz questions.
+                "content": f"""Based on the video information below, generate exactly 15 quiz questions.
 Return ONLY valid JSON, no markdown, no explanation outside the JSON.
 
 {{
@@ -92,21 +95,27 @@ Return ONLY valid JSON, no markdown, no explanation outside the JSON.
       "question": "question text",
       "options": ["A. option1", "B. option2", "C. option3", "D. option4"],
       "correct": "A",
-      "explanation": "friend-like, natural explanation directly answering why it's correct without ever mentioning 'the transcript', 'the video', or saying 'it is given in...'",
+      "explanation": "Brief, natural explanation of why this is the correct answer",
       "start_time": 0
     }}
   ]
 }}
 
-Rules:
+CRITICAL RULES FOR ACCURACY:
 - Questions 1-5: difficulty=easy, type=mcq, simple factual questions
 - Questions 6-10: difficulty=medium, type=mcq, conceptual questions  
-- Questions 11-15: difficulty=hard, type=open (no options array needed, correct=full answer string)
-- ALL questions must be based only on the information below.
-- The `explanation` field MUST respond naturally as a friend, without mentioning source material.
+- Questions 11-15: difficulty=hard, type=open (no options needed, correct=full answer string)
+- The "correct" field for MCQ MUST be the letter (A, B, C, or D) that matches the CORRECT option.
+- DOUBLE CHECK that the correct letter actually corresponds to the right answer in the options list.
+- Only create questions where the answer is CLEARLY supported by the content below.
+- Do NOT create trick questions or questions with ambiguous answers.
+- The explanation must directly state WHY this answer is correct without mentioning "transcript" or "video".
 - For open questions set options to empty array []
 
-INFORMATION:
+VIDEO OVERVIEW:
+{overview}
+
+TRANSCRIPT CONTENT:
 {trimmed}"""
             }
         ]
