@@ -48,8 +48,8 @@ def _generate_overview(chunks: list, metadata: dict) -> str:
     if total_chunks == 0:
         return ""
 
-    # Sample up to 30 chunks evenly distributed across the ENTIRE video
-    max_samples = min(30, total_chunks)
+    # Sample up to 15 chunks evenly distributed across the ENTIRE video
+    max_samples = min(15, total_chunks)
     step = max(1, total_chunks // max_samples)
     sampled = [chunks[i] for i in range(0, total_chunks, step)][:max_samples]
     # Always include the last chunk to ensure full video coverage
@@ -60,12 +60,12 @@ def _generate_overview(chunks: list, metadata: dict) -> str:
     sampled_text = ""
     for idx, chunk in enumerate(sampled):
         position_pct = int((chunk['start_time'] / max(chunks[-1]['start_time'], 1)) * 100)
-        text_snippet = chunk['text'][:400]
-        sampled_text += f"[Section {idx+1}, ~{position_pct}% through video] {text_snippet}\n\n"
+        text_snippet = chunk['text'][:200]
+        sampled_text += f"[Section {idx+1}, ~{position_pct}% through video] {text_snippet}\n"
 
-    # Cap the sampled text to ~10000 chars for the overview generation prompt
-    if len(sampled_text) > 10000:
-        sampled_text = sampled_text[:10000]
+    # Cap the sampled text to ~4000 chars for the overview generation prompt to save tokens
+    if len(sampled_text) > 4000:
+        sampled_text = sampled_text[:4000]
 
     title = metadata.get("title", "Unknown")
     channel = metadata.get("channel", "Unknown")
@@ -88,15 +88,15 @@ Return ONLY valid JSON:
 {{
   "main_topic": "one sentence describing what the entire video is about",
   "topics": [
-    {{"title": "topic name", "description": "2-3 sentence detailed description of what is covered"}}
+    {{"title": "topic name", "description": "1 sentence description"}}
   ],
-  "key_terms": ["term1", "term2", "term3"]
+  "key_terms": ["term1", "term2"]
 }}
 
-IMPORTANT: Include 10-20 topics that cover the FULL video from beginning to end. Do not skip the later parts. Include 15-25 key terms."""
+IMPORTANT: Include 5-10 major topics spanning the full video. Max 10 key terms."""
             }
         ]
-        overview_data = llm_service.chat_completion_json(messages, max_tokens=1500)
+        overview_data = llm_service.chat_completion_json(messages, max_tokens=500)
 
         # Format as readable text for context injection
         overview_text = f"VIDEO: {title} by {channel} ({duration_str})\n"
@@ -203,12 +203,12 @@ async def get_summary(video_id: str):
         # Use the overview as additional context for summary
         overview = cache.get(f"overview:{video_id}") or ""
         
-        # Sample more aggressively for long videos: 5 sections evenly spaced
+        # Sample very carefully to save tokens
         total_len = len(transcript)
         if total_len > 15000:
-            # For long videos, take 5 evenly spaced sections of 2000 chars
-            section_size = 2000
-            num_sections = 5
+            # 3 sections of 1500 chars (4500 chars total)
+            section_size = 1500
+            num_sections = 3
             step = total_len // num_sections
             sections = []
             for i in range(num_sections):
@@ -218,11 +218,11 @@ async def get_summary(video_id: str):
                 f"[SECTION {i+1}/{num_sections}]\n{s}" for i, s in enumerate(sections)
             )
         elif total_len > 6000:
-            # Medium videos: beginning, middle, end
+            # 3 sections of 1000 chars (3000 chars total)
             trimmed = (
-                f"[BEGINNING]\n{transcript[:2500]}\n\n"
-                f"[MIDDLE]\n{transcript[total_len//2 - 1250:total_len//2 + 1250]}\n\n"
-                f"[END]\n{transcript[-2500:]}"
+                f"[BEGINNING]\n{transcript[:1000]}\n\n"
+                f"[MIDDLE]\n{transcript[total_len//2 - 500:total_len//2 + 500]}\n\n"
+                f"[END]\n{transcript[-1000:]}"
             )
         else:
             trimmed = transcript

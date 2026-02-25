@@ -93,22 +93,22 @@ async def chat(body: dict):
                 overlap = len(query_words & chunk_words)
                 scored_chunks.append((overlap, chunk))
             scored_chunks.sort(key=lambda x: x[0], reverse=True)
-            top_chunks = [c for _, c in scored_chunks[:8]]
+            top_chunks = [c for _, c in scored_chunks[:5]]
 
         # If still no good matches, sample evenly across the video
-        if not top_chunks or len(top_chunks) < 4:
+        if not top_chunks or len(top_chunks) < 3:
             total = len(chunks)
-            step = max(1, total // 8)
-            top_chunks = [chunks[i] for i in range(0, total, step)][:8]
+            step = max(1, total // 5)
+            top_chunks = [chunks[i] for i in range(0, total, step)][:5]
 
         # Build context from retrieved chunks (no timestamps)
         context = ""
         for chunk in top_chunks:
             context += f"{chunk['text']}\n\n"
 
-        # Allow generous context: up to ~12000 chars (~3000 tokens)
-        if len(context) > 12000:
-            context = context[:12000] + "\n...(additional content available)"
+        # Tightly constrain context to save tokens (max ~5000 chars)
+        if len(context) > 5000:
+            context = context[:5000] + "\n...(additional content available)"
 
         # Detect if user wants short or detailed answer
         msg_lower = message.lower()
@@ -117,13 +117,13 @@ async def chat(body: dict):
 
         if wants_short:
             length_instruction = "Give a short, concise answer in 2-3 sentences."
-            max_tokens = 200
+            max_tokens = 150
         elif wants_detail:
             length_instruction = "Give a detailed, thorough answer with full explanations. Be as comprehensive as possible."
-            max_tokens = 1000
+            max_tokens = 600
         else:
             length_instruction = "Give a medium-length, informative answer in about 7-10 sentences. Cover the key points well."
-            max_tokens = 500
+            max_tokens = 400
 
         # Check if the transcript content seems too minimal (metadata-only fallback)
         is_minimal_transcript = len(transcript.strip()) < 200 or "transcript was not available" in transcript.lower()
