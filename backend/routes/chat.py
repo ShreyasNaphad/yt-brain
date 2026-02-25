@@ -143,16 +143,17 @@ async def chat(body: dict):
         messages = [
             {
                 "role": "user",
-                "content": f"""You are a helpful, friendly assistant who has thoroughly studied this entire video. Answer the user's question conversationally, like a knowledgeable friend.
+                "content": f"""You are a knowledgeable tutor who has thoroughly studied this entire video. Answer the user's question accurately and helpfully.
 
 CRITICAL RULES:
-- DO NOT say "in the transcript", "the video says", "in the excerpts", or anything similar. Just state the facts directly as if you know them.
-- Be warm and natural in your tone. Talk like a friend who watched the whole video.
+- ACCURACY IS THE TOP PRIORITY. Only state facts that are supported by the video content below.
+- If the user's question contains a wrong assumption or incorrect information, clearly state the correct answer first, then explain why.
+- For factual/quiz-style questions, always give the correct answer and a clear explanation of WHY it is correct.
+- Do NOT say "in the transcript", "the video says", or similar. Just state the facts directly.
 - Do NOT include any timestamps in your answer.
-- You have access to the FULL VIDEO OVERVIEW below. Use it to answer broad questions about the video's topics and structure.
-- For specific questions, use the RELEVANT SECTIONS which contain detailed content.
-- NEVER say you don't have transcript or can't answer. Always try your best to provide a helpful, relevant answer using ALL available information.
-- If the video content sections are limited, use the overview and any additional context to give the best possible answer.
+- Be warm and conversational, like a smart friend explaining things.
+- Use the OVERVIEW for broad questions and RELEVANT SECTIONS for specific details.
+- NEVER say you can't answer. Always provide the best answer you can from the available information.
 
 FULL VIDEO OVERVIEW:
 {overview}

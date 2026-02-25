@@ -240,21 +240,20 @@ TRANSCRIPT EXCERPTS:
 {trimmed}
 
 {{
-  "overview": "3-4 sentence summary of the video",
+  "overview": "4-5 sentence summary explaining what the video teaches, the main arguments or ideas, and what a viewer will learn from it. Be specific, not generic.",
   "deep_concepts": [
-    {{"name": "concept name", "explanation": "2 sentence explanation", "start_time": 0}}
+    {{"name": "concept name", "explanation": "3-4 sentence explanation that actually teaches the concept. Explain WHAT it is, WHY it matters, and HOW it works or applies. Write as if explaining to someone who hasn't watched the video.", "start_time": 0}}
   ],
   "actionable_takeaways": [
-    "takeaway 1",
-    "takeaway 2", 
-    "takeaway 3",
-    "takeaway 4",
-    "takeaway 5"
+    "A specific, practical takeaway that someone can apply after watching this video"
   ]
 }}
 
-Include 4-5 deep_concepts and exactly 5 actionable_takeaways.
-Use actual start_time seconds from the transcript context."""
+IMPORTANT RULES:
+- Include 4-5 deep_concepts with REAL explanations that teach the concept, not just restate the title.
+- Include exactly 5 actionable_takeaways that are specific and practical.
+- The overview should help someone decide if this video is worth watching.
+- Use actual start_time seconds from the transcript context."""
             }
         ]
         
