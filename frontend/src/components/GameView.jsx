@@ -3,6 +3,40 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Trophy, CheckCircle, XCircle, Loader2, Star, Zap, Brain, Home } from 'lucide-react';
 import { getQuestions, gradeAnswer } from '../api/client';
 
+// Robust answer comparison that handles whitespace, case, and format differences
+function isCorrectAnswer(userAnswer, correctAnswer) {
+    if (!userAnswer || !correctAnswer) return false;
+
+    // Normalize both answers
+    const normalize = (str) => str
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/^[a-d]\.\s*/i, '')  // Remove "A. " prefix
+        .replace(/^[a-d]\)\s*/i, '')  // Remove "A) " prefix
+        .replace(/\s+/g, ' ')         // Collapse whitespace
+
+    const u = normalize(userAnswer)
+    const c = normalize(correctAnswer)
+
+    // Direct match after normalization
+    if (u === c) return true
+
+    // Check if user selected letter matches correct letter
+    const userLetter = userAnswer.toString().trim().toUpperCase().charAt(0)
+    const correctLetter = correctAnswer.toString().trim().toUpperCase().charAt(0)
+    if (
+        ['A', 'B', 'C', 'D'].includes(userLetter) &&
+        ['A', 'B', 'C', 'D'].includes(correctLetter) &&
+        userLetter === correctLetter
+    ) return true
+
+    // Check if correct answer starts with user's selection
+    if (c.startsWith(u) || u.startsWith(c)) return true
+
+    return false
+}
+
 const GameView = ({ videoId, metadata, onBack, onGoHome }) => {
     const [questions, setQuestions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -41,10 +75,11 @@ const GameView = ({ videoId, metadata, onBack, onGoHome }) => {
 
     const handleMCQSelect = (option) => {
         if (showResult) return;
-        setSelectedAnswer(option);
-        // Extract the letter (e.g., "A" from "A. something")
-        const letter = option.charAt(0).toUpperCase();
-        const correct = currentQuestion.correct?.charAt(0)?.toUpperCase() === letter;
+        // Store ONLY the letter (A, B, C, or D), not the full option text
+        const userLetter = option.charAt(0).toUpperCase();
+        setSelectedAnswer(userLetter);
+        const correct = isCorrectAnswer(userLetter, currentQuestion.correct);
+        console.log('User selected:', userLetter, '| Correct:', currentQuestion.correct, '| Match:', correct);
         setIsCorrect(correct);
         setShowResult(true);
         if (correct) {
@@ -229,7 +264,7 @@ const GameView = ({ videoId, metadata, onBack, onGoHome }) => {
                                 if (showResult) {
                                     if (letter === correctLetter) {
                                         optClass = 'bg-green-500/20 border-green-500/50 text-green-300';
-                                    } else if (selectedAnswer === opt) {
+                                    } else if (selectedAnswer === letter) {
                                         optClass = 'bg-red-500/20 border-red-500/50 text-red-300';
                                     } else {
                                         optClass = 'bg-white/5 border-white/5 opacity-50';

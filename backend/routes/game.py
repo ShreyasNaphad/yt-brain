@@ -105,7 +105,11 @@ CRITICAL RULES FOR ACCURACY:
 - Questions 1-5: difficulty=easy, type=mcq, simple factual questions
 - Questions 6-10: difficulty=medium, type=mcq, conceptual questions  
 - Questions 11-15: difficulty=hard, type=open (no options needed, correct=full answer string)
-- The "correct" field for MCQ MUST be the letter (A, B, C, or D) that matches the CORRECT option.
+
+CRITICAL: The 'correct' field must ONLY be a single letter: A, B, C, or D. Never include the full option text in correct field.
+The options array must be exactly: ['A. option text', 'B. option text', 'C. option text', 'D. option text']
+Example: 'correct': 'A' not 'correct': 'A. some text'
+
 - DOUBLE CHECK that the correct letter actually corresponds to the right answer in the options list.
 - Only create questions where the answer is CLEARLY supported by the content below.
 - Do NOT create trick questions or questions with ambiguous answers.
